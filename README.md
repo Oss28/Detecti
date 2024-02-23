@@ -19,7 +19,7 @@ At this point it will be sufficient to download the file Detecti.py, which you c
 ./Detecti.py test.sol
 ```
 ## Tests
-This repository contains smart contracts currently deployed on the Ethereum blockchain, serving as test cases to assess the tool's performance. Each vulnerability category includes 10 smart contracts, located within their respective subfolders.
+This repository contains smart contracts, currently deployed on the Ethereum blockchain, serving as test cases to assess the tool's performance. Each vulnerability category includes 10 smart contracts, located within their respective subfolders.
 
 
 
