@@ -14,7 +14,7 @@ The first step will be to install [Surya](https://github.com/ConsenSys/surya), t
 
 Then you will need to verify that python is properly installed on your machine, otherwise install it.
 
-At this point it will be sufficient to download the file Detecti.py, which you can find in this repository, and run it providing as an argument the path to the Solidity file to be analyzed.
+At this point it will be sufficient to download the file Detecti.py, which you can find in this repository, and run it (remember to provide that file with execution permissions) providing as an argument the path to the Solidity file to be analyzed.
 ```
 ./Detecti.py test.sol
 ```
