@@ -21,6 +21,8 @@ At this point it will be sufficient to download the file Detecti.py, which you c
 ## Tests
 `SCs_test` folder contains smart contracts, currently deployed on the Ethereum blockchain, serving as test cases to assess the tool's performance. Each vulnerability category includes 10 smart contracts, located within their respective subfolders: `Ree` for Reentrancy, `TD` for Timestamp Dependence, and `UEC` for Unchecked Call Return Value, also called Unchecked Externall Call.
 
+To easily and quickly reproduce the tests we performed on all 30 smart contracts we provide the `script.py` file.
+
 ## License
 GPLv3.0
 
