@@ -19,10 +19,6 @@ for filename in os.listdir(directory):
         other_args = ['-s', '1', '-a', 'a']
         true_positives=0
         false_positives=0
-        if filename=="Game.sol":
-            other_args = ['-s', '1', '-a', '2,4']
-        if filename=="WithdrawDAO.sol":
-            other_args = ['-s', '1', '-a', '2']
         process = subprocess.Popen(['python3', program_path, file_path] + other_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         
@@ -31,15 +27,12 @@ for filename in os.listdir(directory):
         # Look for "FINAL RESULTS" in the output
         start_index = output_text.rfind("FINAL RESULTS")
         if start_index != -1:
-            # Find the end of the "FINAL RESULTS" section
-            end_index = output_text.rfind("DETAILED OUTPUT", start_index)
-            if end_index != -1:
-                # Extract the "FINAL RESULTS" section
-                final_results_text = output_text[start_index:end_index]
-                #print(final_results_text)
-                # Count True Positives and False Positives in the "FINAL RESULTS" section
-                true_positives += final_results_text.count("True Positive")
-                false_positives += final_results_text.count("False Positive")
+            # Extract the "FINAL RESULTS" section
+            final_results_text = output_text[start_index:]
+            #print(final_results_text)
+            # Count True Positives and False Positives in the "FINAL RESULTS" section
+            true_positives += final_results_text.count("True Positive")
+            false_positives += final_results_text.count("False Positive")
         print("{:<30} {:<20} {}".format(filename, str(true_positives), str(false_positives)))
 
 print()
@@ -60,15 +53,12 @@ for filename in os.listdir(directory):
         # Look for "FINAL RESULTS" in the output
         start_index = output_text.rfind("FINAL RESULTS")
         if start_index != -1:
-            # Find the end of the "FINAL RESULTS" section
-            end_index = output_text.rfind("DETAILED OUTPUT", start_index)
-            if end_index != -1:
-                # Extract the "FINAL RESULTS" section
-                final_results_text = output_text[start_index:end_index]
-                #print(final_results_text)
-                # Count True Positives and False Positives in the "FINAL RESULTS" section
-                true_positives += final_results_text.count("True Positive")
-                false_positives += final_results_text.count("False Positive")
+            # Extract the "FINAL RESULTS" section
+            final_results_text = output_text[start_index:]
+            #print(final_results_text)
+            # Count True Positives and False Positives in the "FINAL RESULTS" section
+            true_positives += final_results_text.count("True Positive")
+            false_positives += final_results_text.count("False Positive")
         print("{:<30} {:<20} {}".format(filename, str(true_positives), str(false_positives)))
 
 print()
@@ -89,13 +79,10 @@ for filename in os.listdir(directory):
         # Look for "FINAL RESULTS" in the output
         start_index = output_text.rfind("FINAL RESULTS")
         if start_index != -1:
-            # Find the end of the "FINAL RESULTS" section
-            end_index = output_text.rfind("DETAILED OUTPUT", start_index)
-            if end_index != -1:
-                # Extract the "FINAL RESULTS" section
-                final_results_text = output_text[start_index:end_index]
-                #print(final_results_text)
-                # Count True Positives and False Positives in the "FINAL RESULTS" section
-                true_positives += final_results_text.count("True Positive")
-                false_positives += final_results_text.count("False Positive")
+            # Extract the "FINAL RESULTS" section
+            final_results_text = output_text[start_index:]
+            #print(final_results_text)
+            # Count True Positives and False Positives in the "FINAL RESULTS" section
+            true_positives += final_results_text.count("True Positive")
+            false_positives += final_results_text.count("False Positive")
         print("{:<30} {:<20} {}".format(filename, str(true_positives), str(false_positives)))

@@ -35,11 +35,11 @@ json_string = json.dumps(contract_json, indent=2)
 
 #print tool name: Detecti
 pixel_art_detecti = """
-D D D     E E E E   T T T T   E E E E   C C C C  T T T T  III
-D     D   E            T      E        C            T      I
-D     D   E E E E      T      E E E E  C            T      I
-D     D   E            T      E        C            T      I
-D D D     E E E E      T      E E E E   C C C C     T     III
+|||||\\\\    ||\\\\\\\\\\ /////||\\\\\\\\\\ ||\\\\\\\\\\   //|||| /////||\\\\\\\\\\  ||
+||    \\\\   ||		||	||       //  	      ||       ||
+||     ||  |||||||	||	|||||||	||	      ||       ||
+||    //   ||		||	||	 \\\\	      ||       ||
+|||||//    ||/////	||	||/////	  \\\\||||      ||       ||
 """
 
 print(pixel_art_detecti)
@@ -47,15 +47,15 @@ print(pixel_art_detecti)
 print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
 print("DESCRIPTION OF OUTPUT (divided into 3 sections)")
 print("1. SINGLE CHECKS: For each part of the code analyzed, it is reported whether the result of the check assumes it is a true positive (T) or a false positive (F)")
-print("2. FINAL RESULTS: For each part of the code analyzed, the final verdict (derived from the overall consideration of all checks) is clearly indicated")
-print("3. DETAILED OUTPUT: It is possible to find more detailed notes of what was found in the analysis")
+print("2. DETAILED OUTPUT: It is possible to find more detailed notes of what was found in the analysis")
+print("3. FINAL RESULTS: For each part of the code analyzed, the final verdict (derived from the overall consideration of all checks) is clearly indicated")
 print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n")
         
     
 #selection of vulnerabilities to be verified
 def select_vulnerabilities(selection_string):
 	if selection_string:
-		vulnerabilities_selection = [0, 0, 0]  # Inizializza tutte le vulnerabilità a non selezionate
+		vulnerabilities_selection = [0, 0, 0]
 		for num in selection_string.split(','):
 			try:
 				index = int(num.strip()) - 1
@@ -68,11 +68,11 @@ def select_vulnerabilities(selection_string):
 				exit()
 		return vulnerabilities_selection
 	else:
-        # Se nessuna selezione è stata fornita come argomento, richiedi input manuale
+        # if selection not given as command parameter ask the user
 		print("Select which vulnerabilities to check:")
 		print("(enter the corresponding numbers, divided by comma)")
 		vulnerabilities_selection = [0, 0, 0]
-		print("1. Unchecked Call Return Value")
+		print("1. Unchecked Return Value")
 		print("2. Timestamp Dependence")
 		print("3. Reentrancy")
 		input_string = input("choice:")
@@ -90,7 +90,6 @@ def select_vulnerabilities(selection_string):
 			print("!INVALID INPUT!")
 			exit()
 
-# Run vulnerability screening
 vulnerabilities_selection = select_vulnerabilities(vulnerability_selection)
 
 #print("Vulnerabilities selected:", vulnerabilities_selection)
@@ -126,18 +125,17 @@ def read(dictionary):
 					return "Variable Name not recognized"
 		return dictionary
 
-#part of code dealing with UNCHECKED CALL RETURN VALUE vulnerability 
+#part of code dealing with UNCHECKED RETURN VALUE vulnerability 
 if vulnerabilities_selection[0]==1:
 	print("/////////////////////////")
-	print("UNCHECKED CALL RETURN VALUE")
+	print("UNCHECKED RETURN VALUE")
 	print("/////////////////////////")
 	print()
 
-	#array to store the information about variables on which send is called, extracted with the subsequent function
-	send_variables=[]
+	#array to store the information of unchecked return value functions [f_name, visibility, variable, modifiers, dictionary instruction]
+	URV_instructions=[]
 
-	#extract information about variables on which send is called
-	def search_send_variables(dictionary, function_name=None, visibility=None, modifiers=None):
+	def search_urv_instructions(dictionary, function_name=None, visibility=None, modifiers=None):
 		if not isinstance(dictionary, dict):
 			return 0
 		for key, value in dictionary.items():
@@ -151,61 +149,46 @@ if vulnerabilities_selection[0]==1:
 						modifiers=element['modifiers']
 					if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
 						continue
-					search_send_variables(element, function_name, visibility, modifiers)
+					search_urv_instructions(element, function_name, visibility, modifiers)
 			elif isinstance(value, dict):
+				#send
+				if key=="condition" or key=="initialValue" or key=="right":
+					continue
 				if 'type' in value and value['type']=="FunctionCall" and 'memberName' in value['expression'] and value['expression']['memberName']=='send' and (value['expression']['expression']['type']=="Identifier" or value['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['type']=="MemberAccess"):
-					send_variables.append((function_name, visibility, value['expression']['expression'], modifiers, value))
-				search_send_variables(value, function_name, visibility, modifiers)
-
-
-	search_send_variables(contract_json)
-
-	#array to store the information about variables on which call is called, extracted with the subsequent function
-	call_variables=[]
-
-	#extract information about variables on which call is called
-	def search_call_variables(dictionary, function_name=None, visibility=None, modifiers=None):
-		if not isinstance(dictionary, dict):
-			return 0
-		for key, value in dictionary.items():
-			if isinstance(value, list):
-				for element in value:
-					if not isinstance(element, dict):
-						return 0
-					if 'type' in element and element['type']=='FunctionDefinition':
-						function_name=element['name']
-						visibility=element['visibility']
-						modifiers=element['modifiers']
-					if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
-						continue
-					search_call_variables(element, function_name, visibility, modifiers)
-			elif isinstance(value, dict):
+					URV_instructions.append(("send",function_name, visibility, value['expression']['expression'], modifiers, value))
+				#call standard version with {}
 				if 'type' in value and value['type']=="NameValueExpression" and 'memberName' in value['expression'] and value['expression']['memberName']=='call' and (value['expression']['expression']['type']=="Identifier" or value['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['type']=="MemberAccess"):
-					call_variables.append((function_name, visibility, value['expression']['expression'], modifiers, value))
-				search_call_variables(value, function_name, visibility, modifiers)
-
-	search_call_variables(contract_json)
+					URV_instructions.append(("call",function_name, visibility, value['expression']['expression'], modifiers, value))
+				#call deprecated version without {}
+				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['memberName']=='call' and (value['expression']['expression']['type']=="Identifier" or value['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['type']=="MemberAccess"):
+					URV_instructions.append(("call",function_name, visibility, value['expression']['expression'], modifiers, value))
+				#call.value
+				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['memberName']=='value' and (value['expression']['expression']['type']=="MemberAccess" and value['expression']['expression']['memberName']=="call") and (value['expression']['expression']['expression']['type']=="Identifier" or value['expression']['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['expression']['type']=="MemberAccess"):
+					URV_instructions.append(("call.value",function_name, visibility, value['expression']['expression']['expression'], modifiers, value))
+				#delegatecall
+				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['memberName']=='delegatecall' and (value['expression']['expression']['type']=="Identifier" or value['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['type']=="MemberAccess"):
+					URV_instructions.append(("delegatecall",function_name, visibility, value['expression']['expression'], modifiers, value))
+				#callcode
+				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['memberName']=='callcode' and (value['expression']['expression']['type']=="Identifier" or value['expression']['expression']['type']=="IndexAccess" or value['expression']['expression']['type']=="MemberAccess"):
+					URV_instructions.append(("callcode",function_name, visibility, value['expression']['expression'], modifiers, value))
+				search_urv_instructions(value, function_name, visibility, modifiers)
+	
+	search_urv_instructions(contract_json)
 
 	#checks whether there are actually instructions in the code that might seem vulnerable
-	if send_variables==[] and call_variables==[]:
-		print("No parts of code were found that might appear vulnerable to Unchecked Externall Call\n")
+	if URV_instructions==[]:
+		print("No parts of code were found that might appear vulnerable to Unchecked Return Value\n")
 	else:
 		#function to allow the user to choose which send and call calls they want to verify
-		def tuple_selection(array,tipo):
+		def tuple_selection(array):
 			tuple_to_keep=[]
 			if alert_selection:
 				choice=alert_selection
 			else:
-				if tipo=="send":
-					print("format: Function, Variable on which send is called")
-				elif tipo=="call":
-					print("format: Function, Variable on which call is called")
-				else:
-					print("ERROR")
-					return 0
+				print("format: Variable on which function is called, Instruction Type, Function\n")
 				for i, tupla in enumerate(array):
-					print(f"{i + 1}. {tupla[0]},{read(tupla[2])}")
-				choice=input("Insert the number of the tuples that need to be verified (separated by comma) - put n for none / put a for all:")
+					print(f"{i + 1}. {read(tupla[3])},{tupla[0]},{str(tupla[1])}")
+				choice=input("\nInsert the number of the tuples that need to be verified (separated by comma) - put n for none / put a for all:")
 			if choice == "a" or choice == "n" or all(number.strip().isdigit() for number in choice.split(',')):
 				if choice=="n":
 					return tuple_to_keep
@@ -222,18 +205,15 @@ if vulnerabilities_selection[0]==1:
 				else:
 					print("!INVALID INPUT!")
 				print()
-				return tuple_selection(array,tipo)
+				return tuple_selection(array)
 
 
-		if send_variables!=[]:
-			send_variables=tuple_selection(send_variables,"send")
-		if call_variables!=[]:
-			print("----------------------------------")
-			call_variables=tuple_selection(call_variables,"call")
+		URV_instructions=tuple_selection(URV_instructions)
+		#for instr in URV_instructions:
+		#	print(instr)
 
 		#arrays used in the "Final Results" output - store overall verdict for each send/call instruction
-		results_send=array('u',['t']*len(send_variables))
-		results_call=array('u',['t']*len(call_variables))
+		results_URV=array('u',['t']*len(URV_instructions))
 
 		print("\n--------------------------------------------------\n")
 		print("{:<40} {}".format("CHECK", "RESULTS"))
@@ -244,23 +224,13 @@ if vulnerabilities_selection[0]==1:
 		print("-Function is public/external-")
 		alert_string+="\nCHECK REFERENCE:-Function is public/external-"
 		i=0
-		for variable in send_variables:
-			if variable[1]=="private" or variable[1]=="internal":
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				alert_string+="\n!!!ATTENTION!!!! The send call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because of the visibility of the function \"" + variable[0] + "\" which is " + variable[1]
-				results_send[i]='f'
+		for variable in URV_instructions:
+			if variable[2]=="private" or variable[2]=="internal":
+				print("{:<43} {}".format(read(variable[3]), "F"))
+				alert_string+="\n!!!ATTENTION!!!! The "+ variable[0] +" call on the \"" + read(variable[3]) + "\" variable could be a FALSE POSITIVE because of the visibility of the function \"" + str(variable[1]) + "\" which is " + str(variable[2])
+				results_URV[i]='f'
 			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
-			i+=1
-
-		i=0
-		for variable in call_variables:
-			if variable[1]=="private" or variable[1]=="internal":
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_call[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The call call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because of the visibility of the function \"" + variable[0] + "\" which is " + variable[1]
-			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
+				print("{:<43} {}".format(read(variable[3]), "T"))
 			i+=1
 
 		print()
@@ -270,27 +240,16 @@ if vulnerabilities_selection[0]==1:
 		print("-Absence of Modifiers-")
 		alert_string+="\nCHECK REFERENCE:-Absence of Modifiers-"
 		i=0
-		for variable in send_variables:
-			if variable[3]!=[]:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_send[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The send call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because of the modifiers of the function \"" + variable[0] + "\", please check their restrictions"
+		for variable in URV_instructions:
+			if variable[4]!=[]:
+				print("{:<43} {}".format(read(variable[3]), "F"))
+				results_URV[i]='f'
+				alert_string+="\n!!!ATTENTION!!!! The "+ variable[0] +" call on the \"" + read(variable[3]) + "\" variable could be a FALSE POSITIVE because of the modifiers of the function \"" + str(variable[1]) + "\", please check their restrictions"
 			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
-			i+=1
-
-		i=0
-		for variable in call_variables:
-			if variable[3]!=[]:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_call[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The call call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because of the modifiers of the function \"" + variable[0] + "\", please check their restrictions"
-			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
+				print("{:<43} {}".format(read(variable[3]), "T"))
 			i+=1
 
 		alert_string+="\n"
-
 
 		#extract contract name
 		contract_name = contract_json.get("children", [{}])[0].get("name", None)
@@ -304,7 +263,7 @@ if vulnerabilities_selection[0]==1:
 		final_definition="Not Found"
 				
 		#function to identify how the variable on which send/call is called is defined
-		def search_definition(dictionary,variable_name,function, tipo, ident):
+		def search_definition(dictionary,variable_name,function, ident):
 			if not isinstance(dictionary, dict):
 				#print(dictionary)\
 				return 0
@@ -317,14 +276,14 @@ if vulnerabilities_selection[0]==1:
 							continue
 						if key=='subNodes':
 							if 'type' in element and element['type']=='FunctionDefinition' and element['name']==function:
-								search_definition(element, variable_name, function, tipo, ident)
+								search_definition(element, variable_name, function, ident)
 								continue
 							else:
 								continue
 						if key=="statements":
 							if "type" in element and element["type"]=="VariableDeclarationStatement" and "name" in element["variables"][0] and variable_name['type']=="Identifier" and element["variables"][0]["name"]==variable_name['name']:
 									definition=element["initialValue"]
-						search_definition(element, variable_name, function, tipo, ident)
+						search_definition(element, variable_name, function, ident)
 					
 				elif isinstance(value, dict):
 					if key=="expression" and value["type"]=="BinaryOperation" and value["operator"]=="=" and value['left']==variable_name:
@@ -332,7 +291,7 @@ if vulnerabilities_selection[0]==1:
 					#condition to check when to stop looking for assignments to the variable, we do not want to consider those after the call to send
 					if key=='expression' and value==ident:
 						final_definition=definition
-					search_definition(value, variable_name, function, tipo, ident)
+					search_definition(value, variable_name, function, ident)
 
 		print()
 
@@ -341,27 +300,14 @@ if vulnerabilities_selection[0]==1:
 		print(" from address of msg.sender-")
 		alert_string+="\nCHECK REFERENCE:-Variable defined differently from address of msg.sender-"
 		i=0
-		for variable in send_variables:
-			search_definition(contract_json,variable[2],variable[0],"send",variable[4])
-			if final_definition==msg_sender or variable[2]==msg_sender:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_send[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The send call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the variable is assigned to the address of message sender (possible attacker)"
+		for variable in URV_instructions:
+			search_definition(contract_json,variable[3],variable[1],variable[5])
+			if final_definition==msg_sender or variable[3]==msg_sender:
+				print("{:<43} {}".format(read(variable[3]), "F"))
+				results_URV[i]='f'
+				alert_string+="\n!!!ATTENTION!!!! The "+ variable[0] +" call on the \"" + read(variable[3]) + "\" variable could be a FALSE POSITIVE because the variable is assigned to the address of message sender (possible attacker)"
 			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
-			i+=1
-			definition="Not Found"
-			final_definition="Not Found"
-
-		i=0
-		for variable in call_variables:
-			search_definition(contract_json,variable[2],variable[0],"call",variable[4])
-			if final_definition==msg_sender or variable[2]==msg_sender:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_call[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The call call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the variable is assigned to the address of message sender (possible attacker)"
-			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
+				print("{:<43} {}".format(read(variable[3]), "T"))
 			i+=1
 			definition="Not Found"
 			final_definition="Not Found"
@@ -424,37 +370,22 @@ if vulnerabilities_selection[0]==1:
 					search_require(value, ident,function)
 
 		#checks whether the send/call instruction is subject to some kind of condition
-		print("-Send/Call not subject to conditions")
+		print("-Instruction not subject to conditions")
 		print(" (if or require)-")
-		alert_string+="\nCHECK REFERENCE:-Send/Call not subject to conditions (if or require)-"
+		alert_string+="\nCHECK REFERENCE:-Instruction not subject to conditions (if or require)-"
 		i=0
-		for variable in send_variables:
-			search_conditions(contract_json,variable[4],variable[0])
-			search_require(contract_json,variable[4],variable[0])
+		for variable in URV_instructions:
+			search_conditions(contract_json,variable[5],variable[1])
+			search_require(contract_json,variable[5],variable[1])
 			if check==1:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_send[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The send call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the call is subject to some conditions (if or require), please check their implementations"
+				print("{:<43} {}".format(read(variable[3]), "F"))
+				results_URV[i]='f'
+				alert_string+="\n!!!ATTENTION!!!! The "+ variable[0] +" call on the \"" + read(variable[3]) + "\" variable could be a FALSE POSITIVE because the call is subject to some conditions (if or require), please check their implementations"
 			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
+				print("{:<43} {}".format(read(variable[3]), "T"))
 			i+=1
 			check=0
 			found_require=0	
-
-		i=0
-		for variable in call_variables:
-			search_conditions(contract_json,variable[4],variable[0])
-			search_require(contract_json,variable[4],variable[0])
-			if check==1:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_call[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The call call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the call is subject to some conditions (if or require), please check their implementations"
-			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
-			i+=1
-			check=0
-			found_require=0	
-
 
 		final=""
 		#function to extract last instruction of a function
@@ -475,57 +406,41 @@ if vulnerabilities_selection[0]==1:
 								continue
 						if key=="statements" and value.index(element)==len(value)-1:
 							final=element
+							if 'type' in element and element['type']=="IfStatement" and "statements" not in element['trueBody']:
+								final=element['trueBody']
 						last_statement(element, function)
 					
 				elif isinstance(value, dict):
 					last_statement(value, function)
 
 		#checks whether the send/call instruction is the last instruction in the function
-		print("\n-Send/Call not last operation-")
-		alert_string+="\n\nCHECK REFERENCE:-Send/Call not last operation-"
+		print("\n-Instruction not last operation-")
+		alert_string+="\n\nCHECK REFERENCE:-Instruction not last operation-"
 		i=0
-		for variable in send_variables:
+		for variable in URV_instructions:
 			final=""
-			last_statement(contract_json,variable[0])
-			if 'expression' in final and final['expression']==variable[4]:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_send[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The send call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the call is the last operation in \""+ variable[0] +"\" function"
+			last_statement(contract_json,variable[1])
+			if 'expression' in final and final['expression']==variable[5]:
+				print("{:<43} {}".format(read(variable[3]), "F"))
+				results_URV[i]='f'
+				alert_string+="\n!!!ATTENTION!!!! The "+ variable[0] +" call on the \"" + read(variable[3]) + "\" variable could be a FALSE POSITIVE because the call is the last operation in \""+ str(variable[1]) +"\" function"
 			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
+				print("{:<43} {}".format(read(variable[3]), "T"))
 			i+=1
 			
-		i=0
-		for variable in call_variables:
-			final=""
-			last_statement(contract_json,variable[0])
-			if 'expression' in final and final['expression']==variable[4]:
-				print("{:<43} {}".format(read(variable[2]), "F"))
-				results_call[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The call call on the \"" + read(variable[2]) + "\" variable could be a FALSE POSITIVE because the call is the last operation in \""+ variable[0] +"\" function"
-			else:
-				print("{:<43} {}".format(read(variable[2]), "T"))
-			i+=1
+		print("\n--------------------------------------------------\n")
+		print("                DETAILED OUTPUT")
+		print(alert_string)
 
 		print("\n--------------------------------------------------\n")	
 		print("                FINAL RESULTS\n")
 		i=0
-		for variable in send_variables:
-			if results_send[i]=='t':
-				print("{:<35} {}".format(read(variable[2]), "True Positive"))
-			elif results_send[i]=='f':
-				print("{:<35} {}".format(read(variable[2]), "False Positive"))
+		for variable in URV_instructions:
+			if results_URV[i]=='t':
+				print("{:<35} {}".format(read(variable[3]), "True Positive"))
+			elif results_URV[i]=='f':
+				print("{:<35} {}".format(read(variable[3]), "False Positive"))
 			i+=1
-		i=0
-		for variable in call_variables:
-			if results_call[i]=='t':
-				print("{:<35} {}".format(read(variable[2]), "True Positive"))
-			elif results_call[i]=='f':
-				print("{:<35} {}".format(read(variable[2]), "False Positive"))
-			i+=1
-		print("\n--------------------------------------------------\n")
-		print("                DETAILED OUTPUT")
-		print(alert_string)
 
 #part of code dealing with TIMESTAMP DEPENDENCE vulnerability 
 if vulnerabilities_selection[1]==1:
@@ -540,6 +455,32 @@ if vulnerabilities_selection[1]==1:
 	alert_string=""
 
 	presence=0
+
+	state_variables=[]
+	def extract_variables(dictionary):
+		if not isinstance(dictionary, dict):
+			return 0
+		for key, value in dictionary.items():
+			if isinstance(value, list):
+				for element in value:
+					if not isinstance(element, dict):
+						continue
+					if key=='subNodes':
+						if "type" in element and element["type"]=="StateVariableDeclaration":
+							state_variables.append(element['variables'][0]['identifier'])
+							extract_variables(element)
+							continue
+						else:
+							continue
+					extract_variables(element)
+				
+			elif isinstance(value, dict):
+				extract_variables(value)
+
+	extract_variables(contract_json)
+
+	#for var in state_variables:
+	#	print(var)
 
 	#function to check whether there is an occurrence of the timestamp within a dictionary
 	def timestamp_presence(dictionary):
@@ -562,9 +503,9 @@ if vulnerabilities_selection[1]==1:
 	#array to save information about the instructions in which the timestamp is used
 	timestamp_usage=[]
 	#counters in case the timestamp is used in different conditions (of the same type) within the same function
-	c1=1
-	c2=1
-	c3=1
+	c1=1 #if conditions
+	c2=1 #require conditions
+	c3=1 #while conditions
 
 	#variable to account for the "line" of code
 	l=0
@@ -605,39 +546,43 @@ if vulnerabilities_selection[1]==1:
 						presence=0
 						timestamp_presence(element["initialValue"])
 						if presence==1:
-							timestamp_usage.append(("assignment",element['variables'][0]['name'],function_name, tipo, l, visibility, modifiers))
+							timestamp_usage.append(("assignment",element['variables'][0]['identifier'],"s",function_name, tipo, l))
 					#verification variable definition in functions
 					if key=='statements' and element['type']=='VariableDeclarationStatement':
 						presence=0
 						timestamp_presence(element["initialValue"])
 						if presence==1:
-							timestamp_usage.append(("assignment",element['variables'][0]['name'],function_name, tipo, l, visibility, modifiers))
+							timestamp_usage.append(("assignment",element['variables'][0]['identifier'],"l", function_name, tipo, l))
 					#check assignments
 					if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='BinaryOperation' and (element['expression']['operator']=='=' or element['expression']['operator']=='+=' or element['expression']['operator']=='-='):
 						presence=0
 						timestamp_presence(element['expression']['right'])
 						if presence==1:
-							timestamp_usage.append(("assignment",element['expression']['left'],function_name, tipo, l, visibility, modifiers))
+							if (element['expression']['left']['type']=='Identifier' and element['expression']['left'] in state_variables) or (element['expression']['left']['type']=='IndexAccess' and element['expression']['left']['base'] in state_variables):
+								timestamp_usage.append(("assignment",element['expression']['left'],"s",function_name, tipo, l))
+							else:
+								timestamp_usage.append(("assignment",element['expression']['left'],"l",function_name, tipo, l))
+							
 					#check if conditions
 					if key=='statements' and element['type']=='IfStatement':
 						presence=0
 						timestamp_presence(element["condition"])
 						if presence==1:
-							timestamp_usage.append(("if condition", c1, function_name, tipo, l, visibility, modifiers, element['trueBody'], element['falseBody']))
+							timestamp_usage.append(("if condition", c1, function_name, tipo, element["condition"]))
 							c1+=1
 					#check require conditions
 					if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='FunctionCall' and 'name' in element['expression']['expression'] and element['expression']['expression']['name']=='require':
 						presence=0
 						timestamp_presence(element['expression']['arguments'][0])
 						if presence==1:
-							timestamp_usage.append(("require condition", c2, function_name, tipo, l, visibility, modifiers))
+							timestamp_usage.append(("require condition", c2, function_name, tipo, element['expression']['arguments'][0]))
 							c2+=1
 					#check while conditions
 					if key=='statements' and element['type']=='WhileStatement':
 						presence=0
 						timestamp_presence(element["condition"])
 						if presence==1:
-							timestamp_usage.append(("while condition", c3, function_name, tipo, l, visibility, modifiers, element['body']))
+							timestamp_usage.append(("while condition", c3, function_name, tipo, element["condition"]))
 							c3+=1
 					
 					search_timestamp(element, function_name, tipo, visibility, modifiers)
@@ -669,10 +614,13 @@ if vulnerabilities_selection[1]==1:
 				choice=alert_selection
 			else:
 				print("format assignment: \"assignment\", Variable, Function/Modifier Name")
-				print("format condition: Condition Type, Occurrence #n, Function/Modifier Name")
+				print("format condition: Condition Type, Occurrence #n, Function/Modifier Name\n")
 				for i, tupla in enumerate(array):
-					print(f"{i + 1}. {tupla[0]},{read(tupla[1])},{tupla[3]} {tupla[2]}")
-				choice=input("Insert the number of the tuples that need to be verified (separated by comma) - put n for none / put a for all:")
+					if tupla[0]=="assignment":
+						print(f"{i + 1}. {tupla[0]},{read(tupla[1])},{tupla[4]} {tupla[3]}")
+					else:
+						print(f"{i + 1}. {tupla[0]},{tupla[1]},{tupla[3]} {tupla[2]}")
+				choice=input("\nInsert the number of the tuples that need to be verified (separated by comma) - put n for none / put a for all:")
 			if choice == "a" or choice == "n" or all(number.strip().isdigit() for number in choice.split(',')):
 				if choice=="n":
 					return tuple_to_keep
@@ -692,6 +640,8 @@ if vulnerabilities_selection[1]==1:
 				return tuple_selection(array)
 
 		timestamp_usage=tuple_selection(timestamp_usage)
+		#for tupla in timestamp_usage:
+		#	print(tupla)
 
 		#function to check whether a variable appears within an expression (dictionary)
 		def variable_presence(dictionary,variable):
@@ -715,7 +665,7 @@ if vulnerabilities_selection[1]==1:
 
 		#function to identify variables defined using a specific variable
 		sub_var=[]
-		def scroll_definitions(dictionary,variable_name, variabile_orig, function, tipo, line, functionC=None, tipoC=None):
+		def scroll_definitions_local(dictionary,variable_name, function, tipo, line, functionC=None, tipoC=None):
 			global l
 			global presence
 			global sub_var
@@ -729,36 +679,89 @@ if vulnerabilities_selection[1]==1:
 							return 0
 						#verifies that it is in the considered function
 						if key=='subNodes' and 'type' in element and element['type']=='FunctionDefinition':
-							scroll_definitions(element,variable_name, variabile_orig, function, tipo, line, element['name'], "function")
+							scroll_definitions_local(element,variable_name, function, tipo, line, element['name'], "function")
 							continue
 						if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
-							scroll_definitions(element,variable_name, variabile_orig, function, tipo, line, element['name'], "modifier")
+							scroll_definitions_local(element,variable_name, function, tipo, line, element['name'], "modifier")
 							continue
 						
 						if key=='subNodes' and element['type']=='StateVariableDeclaration' and l>=line and (tipo==None or (tipo==tipoC and function==functionC)):
 							presence=0
 							variable_presence(element["initialValue"],variable_name)
 							if presence==1:
-								sub_var.append((element['variables'][0]['name'], l))
+								sub_var.append((element['variables'][0]['identifier'], l, "s", functionC, tipoC))
 						#verification variable definition in functions
 						if key=='statements' and element['type']=='VariableDeclarationStatement' and l>=line and (tipo==None or (tipo==tipoC and function==functionC)):
 							presence=0
 							variable_presence(element["initialValue"],variable_name)
 							if presence==1:
-								sub_var.append((element['variables'][0]['name'], l))
+								sub_var.append((element['variables'][0]['identifier'], l, "l", functionC, tipoC))
 						#check assignments
 						if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='BinaryOperation' and (element['expression']['operator']=='=' or element['expression']['operator']=='+=' or element['expression']['operator']=='-=') and l>=line and (tipo==None or (tipo==tipoC and function==functionC)):
 							presence=0
 							variable_presence(element['expression']['right'],variable_name)
 							if presence==1:
-								sub_var.append((element['expression']['left'], l))				
+								if (element['expression']['left']['type']=='Identifier' and element['expression']['left'] in state_variables) or (element['expression']['left']['type']=='IndexAccess' and element['expression']['left']['base'] in state_variables):
+									sub_var.append((element['expression']['left'], l, "s", functionC, tipoC))
+								else:
+									sub_var.append((element['expression']['left'], l, "l", functionC, tipoC))				
 
-						scroll_definitions(element,variable_name, variabile_orig, function, tipo, line, functionC, tipoC)
+						scroll_definitions_local(element,variable_name, function, tipo, line, functionC, tipoC)
 				elif isinstance(value, dict):
 					l+=1
-					scroll_definitions(value,variable_name, variabile_orig, function, tipo, line, functionC, tipoC)
+					scroll_definitions_local(value,variable_name, function, tipo, line, functionC, tipoC)
 				else:
 					l+=1
+
+
+		def scroll_definitions_state(dictionary,variable_name, functionC=None, tipoC=None):
+			global l
+			global presence
+			global sub_var
+			if not isinstance(dictionary, dict):
+				return 0
+			for key, value in dictionary.items():
+				if isinstance(value, list):
+					l+=1
+					for element in value:
+						if not isinstance(element, dict):
+							return 0
+						#verifies that it is in the considered function
+						if key=='subNodes' and 'type' in element and element['type']=='FunctionDefinition':
+							scroll_definitions_state(element,variable_name, element['name'], "function")
+							continue
+						if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
+							scroll_definitions_state(element,variable_name, element['name'], "modifier")
+							continue
+						
+						if key=='subNodes' and element['type']=='StateVariableDeclaration':
+							presence=0
+							variable_presence(element["initialValue"],variable_name)
+							if presence==1:
+								sub_var.append((element['variables'][0]['identifier'], l, "s", functionC, tipoC))
+						#verification variable definition in functions
+						if key=='statements' and element['type']=='VariableDeclarationStatement':
+							presence=0
+							variable_presence(element["initialValue"],variable_name)
+							if presence==1:
+								sub_var.append((element['variables'][0]['identifier'], l, "l", functionC, tipoC))
+						#check assignments
+						if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='BinaryOperation' and (element['expression']['operator']=='=' or element['expression']['operator']=='+=' or element['expression']['operator']=='-='):
+							presence=0
+							variable_presence(element['expression']['right'],variable_name)
+							if presence==1:
+								if (element['expression']['left']['type']=='Identifier' and element['expression']['left'] in state_variables) or (element['expression']['left']['type']=='IndexAccess' and element['expression']['left']['base'] in state_variables):
+									sub_var.append((element['expression']['left'], l, "s", functionC, tipoC))
+								else:
+									sub_var.append((element['expression']['left'], l, "l", functionC, tipoC))				
+
+						scroll_definitions_state(element,variable_name, functionC, tipoC)
+				elif isinstance(value, dict):
+					l+=1
+					scroll_definitions_state(value,variable_name, functionC, tipoC)
+				else:
+					l+=1
+
 
 
 		#assignment tuple count 
@@ -771,393 +774,254 @@ if vulnerabilities_selection[1]==1:
 		print()
 		related_variables = [[] for _ in range(c)]
 		i=0
-		new=0
 		for var in timestamp_usage:
 			if var[0]=="assignment":
 				sub_var=[]
 				l=0
-				scroll_definitions(contract_json,var[1],var[1],var[2],var[3],var[4])
+				if var[2]=="l":
+					scroll_definitions_local(contract_json,var[1],var[3],var[4],var[5])
+				elif var[2]=="s":
+					scroll_definitions_state(contract_json,var[1])
+				else:
+					print("Errore")
+					sys.exit()
 				for agg in sub_var:
-					new=0
-					for old in related_variables[i]:
-						if agg==old:
-							new=1
-					if new==0:
+					if agg not in related_variables[i]:
 						related_variables[i].append(agg)
 				while sub_var!=[]:
 					cycle=sub_var
 					sub_var=[]
 					for vari in cycle:
 						l=0
-						scroll_definitions(contract_json,vari[0],var[1],var[2],var[3],vari[1])
-					
+						if vari[2]=="l":
+							scroll_definitions_local(contract_json,vari[0],vari[3],vari[4],vari[1])
+						elif vari[2]=="s":
+							scroll_definitions_state(contract_json,vari[0])
+						else:
+							print("Errore")
+							sys.exit()
+
 					for agg in sub_var:
-						new=0
-						for old in related_variables[i]:
-							if agg==old or agg==var[1]:
-								new=1
-								sub_var.remove(agg)
-						if new==0:
+						if agg in related_variables[i] or agg==var[1]:
+							sub_var.remove(agg)
+						else:
 							related_variables[i].append(agg)
 				i+=1
+		
+		#for elem in related_variables:
+		#	print("-----------------------------------------")
+		#	for el in elem:
+		#		print(el)
+		#		print()
 
-		#Extract variables that are used as the amount of cryptocurrency to be transferred
-		variables_money=[]
-		def search_variables(dictionary, function_name=None, tipo2=None, defin=None, tipo=None):
-			global l
-			if not isinstance(dictionary, dict):
-				#print(dictionary)\
-				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					l+=1
-					for element in value:
-						if not isinstance(element, dict):
-							continue
-						if 'type' in element and element['type']=='FunctionDefinition':
-							function_name=element['name']
-							tipo2="function"
-						if 'type' in element and element['type']=='ModifierDefinition':
-							function_name=element['name']
-							tipo2="modifier"
-						if key=='arguments' and defin==1:
-							search_variables(element, function_name, tipo2, 1, tipo)
-						else:
-							search_variables(element, function_name, tipo2)
-				elif isinstance(value, dict):
-					l+=1
-					if (key=='right' or key=='left') and 'type' in value and (value['type']=='Identifier' or value['type']=='IndexAccess') and defin==1:
-						variables_money.append((function_name, tipo, value, tipo2, l))
-
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='send':
-						if value['arguments'][0]['type']=='Identifier' or value['arguments'][0]['type']=='IndexAccess':
-							variables_money.append((function_name, "send", value['arguments'][0], tipo2, l))
-							search_variables(value, function_name, tipo2)
-						else:
-							search_variables(value, function_name, tipo2, 1, "send")
-					elif (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='transfer':
-						if value['arguments'][0]['type']=='Identifier' or value['arguments'][0]['type']=='IndexAccess':
-							variables_money.append((function_name, "transfer",value['arguments'][0], tipo2, l))
-							search_variables(value, function_name, tipo2)
-						else:
-							search_variables(value, function_name, tipo2, 1, "transfer")
-					elif (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'type' in value['expression'] and value['expression']['type']=='NameValueExpression' and value['expression']['expression']['memberName']=='call':
-						if value['expression']['arguments']['arguments'][0]['type']=='Identifier' or value['expression']['arguments']['arguments'][0]['type']=='IndexAccess':
-							variables_money.append((function_name, "call",value['expression']['arguments']['arguments'][0], tipo2, l))
-							search_variables(value, function_name, tipo2)
-						else:
-							search_variables(value, function_name, tipo2, 1, "call")
-					elif key=='expression' and defin==1 and 'type' in value and value['type']=='NameValueExpression':
-						search_variables(value, function_name, tipo2, 1, tipo)
-					elif key=='arguments' and defin==1 and 'type' in value and value['type']=='NameValueList':
-						search_variables(value, function_name, tipo2, 1, tipo)
-					elif (key=='right' or key=='left') and defin==1:
-						search_variables(value, function_name, tipo2, 1, tipo)
-					else:
-						search_variables(value, function_name, tipo2)
-				else:
-					l+=1
-
-
-		search_variables(contract_json)
-
-		#compare variables_money with variables defined using timestamps
-		alert_money=array('u',['s']*c)
-		i=0
-		alt=None
-		for var in timestamp_usage:
-			if var[0]=="assignment":
-				alt=None
-				if not isinstance(var[1], dict):
-					alt={'type': 'Identifier','name': var[1]}
-				for money in variables_money:
-					if (var[1]==money[2] or alt==money[2]) and (var[2]==None or var[2]==money[0]) and (var[3]==None or var[3]==money[3]) and var[4]<money[4]:
-						alert_money[i]="a"
-				for vari in related_variables[i]:
-					alt=None
-					if not isinstance(vari[0], dict):
-						alt={'type': 'Identifier','name': vari[0]}
-					for money in variables_money:
-						if (vari[0]==money[2] or alt==money[2]) and (var[2]==None or var[2]==money[0]) and (var[3]==None or var[3]==money[3]) and vari[1]<money[4]:
-							alert_money[i]="a"
-				i+=1
-
-		#function to extract all variables within the condition (dictionary)
-		condition_variables=[]
-		def extract_variables(dictionary,function):
-			global condition_variables
-			if not isinstance(dictionary, dict):
-				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					for element in value:
-						if not isinstance(element, dict):
-							return 0
-						extract_variables(element,function)
-				elif isinstance(value, dict):
-					if (key=="left" or key=="right") and (value['type']=="Identifier" or value['type']=="IndexAccess"):
-						condition_variables.append((value, function))
-					extract_variables(value,function)
-
-		#function to check whether any of the variables defined using timestamp is present in the condition
-		conditions_alert=array('u',['s']*c)
-		def variable_verification(line):
-			i=0
-			alt=None
-			global conditions_alert
-			for var in timestamp_usage:
-				if var[0]=="assignment":
-					alt=None
-					if not isinstance(var[1], dict):
-						alt={'type': 'Identifier','name': var[1]}
-					for cond in condition_variables:
-						if (var[1]==cond[0] or alt==cond[0]) and (var[2]==None or var[2]==cond[1]) and var[4]<line:
-							conditions_alert[i]="a"
-					for vari in related_variables[i]:
-						alt=None
-						if not isinstance(vari[0], dict):
-							alt={'type': 'Identifier','name': vari[0]}
-						for cond in condition_variables:
-							if vari[0]==cond[0] and (var[2]==None or var[2]==cond[1]) and vari[1]<line:
-								conditions_alert[i]="a"
-					i+=1
-		#function to check whether "dangerous" operations are performed within the body of the if/while condition
-		dangeorus=0
-		def verification_body(dictionary, function):
-			global dangeorus
-			l2=l
-			if not isinstance(dictionary, dict):
-				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					l2+=1
-					for element in value:
-						if not isinstance(element, dict):
-							return 0
-						if key=='statements' and element['type']=="VariableDeclarationStatement" and element['initialValue']!=None:
-							for var in variables_money:
-								if function==var[0] and var[2]==element['variables'][0]['identifier'] and var[4]>l2:
-									dangeorus=1
-						if key=='statements' and element['type']=="ExpressionStatement" and element['expression']['type']=="BinaryOperation" and (element['expression']['operator']=='=' or element['expression']['operator']=='+=' or element['expression']['operator']=='-='):
-							for var in variables_money:
-								if function==var[0] and var[2]==element['expression']['left'] and var[4]>l2:
-									dangeorus=1
-						verification_body(element, function)
-				elif isinstance(value, dict):
-					l2+=1
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='send':
-						dangeorus=1
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='transfer':
-						dangeorus=1
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'type' in value['expression'] and value['expression']['type']=='NameValueExpression' and value['expression']['expression']['memberName']=='call':
-						dangeorus=1
-					
-
-					verification_body(value, function)
-				else:
-					l2+=1
-
-		#function to check whether "dangerous" operations are performed after the require condition
-		check=0
-		def verification_body_require(dictionary, function, req):
-			global check
-			global dangeorus
-			if not isinstance(dictionary, dict):
-				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					for element in value:
-						if not isinstance(element, dict):
-							return 0
-						if ('type' in element and element['type']=='FunctionDefinition' and element['name']!=function) or ('type' in element and element['type']=='ModifierDefinition'):
-							continue
-						if key=='statements' and element['type']=="VariableDeclarationStatement" and element['initialValue']!=None and check==1:
-							for var in variables_money:
-								if function==var[0] and var[2]==element['variables'][0]['identifier']:
-									dangeorus=1
-						if key=='statements' and element['type']=="ExpressionStatement" and element['expression']['type']=="BinaryOperation" and (element['expression']['operator']=='=' or element['expression']['operator']=='+=' or element['expression']['operator']=='-=') and check==1:
-							for var in variables_money:
-								if function==var[0] and var[2]==element['expression']['left']:
-									dangeorus=1
-						if key=='statements' and element==req:
-							check=1
-						verification_body_require(element, function, req)
-				elif isinstance(value, dict):
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='send' and check==1:
-						dangeorus=1
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'memberName' in value['expression'] and value['expression']['memberName']=='transfer' and check==1:
-						dangeorus=1
-					if (key=='expression' or key=='initialValue' or key=='right' or key=='left') and value['type']=='FunctionCall' and 'type' in value['expression'] and value['expression']['type']=='NameValueExpression' and value['expression']['expression']['memberName']=='call' and check==1:
-						dangeorus=1
-					verification_body_require(value, function, req)
-
-		#function to identify all conditions within the code
-		def search_conditions(dictionary, function_name=None):
-			global condition_variables
-			global dangeorus
-			global l
-			global check
-			if not isinstance(dictionary, dict):
-				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					l+=1
-					for element in value:
-						if not isinstance(element, dict):
-							continue
-						if 'type' in element and element['type']=='FunctionDefinition':
-							function_name=element['name']
-						#check if conditions
-						if key=='statements' and element['type']=='IfStatement':
-							dangeorus=0
-							verification_body(element['trueBody'], function_name)
-							verification_body(element['falseBody'], function_name)
-							if dangeorus==1:
-								condition_variables=[]
-								extract_variables(element['condition'], function_name)
-								variable_verification(l)
-						#check require conditions
-						if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='FunctionCall' and 'name' in element['expression']['expression'] and element['expression']['expression']['name']=='require':
-							check=0
-							dangeorus=0
-							verification_body_require(contract_json,function_name,element)
-							if dangeorus==1:
-								condition_variables=[]
-								extract_variables(element['expression']['arguments'][0], function_name)
-								variable_verification(l)
-						#check while conditions
-						if key=='statements' and element['type']=='WhileStatement':
-							dangeorus=0
-							verification_body(element['body'], function_name)
-							if dangeorus==1:
-								condition_variables=[]
-								extract_variables(element['condition'], function_name)
-								variable_verification(l)
-						search_conditions(element, function_name)
-				elif isinstance(value, dict):
-					l+=1
-					search_conditions(value, function_name)
-				else:
-					l+=1
-
+		
 		print("\n--------------------------------------------------\n")
 		l=0
-		search_conditions(contract_json)
+		#search_conditions(contract_json)
+
+		def variable_presence_arguments(dictionary,variable):
+			if not isinstance(dictionary, list):
+				print("ERRORE")
+				return 0
+			for elem in  dictionary:
+				variable_presence(elem,variable)
+
+		def control_functions(dictionary, var, scope, fun, tipo, line, functionC=None, tipoC=None):
+			global l
+			global check
+			global presence
+			global check_spec
+			if not isinstance(dictionary, dict):
+				return 0
+			for key, value in dictionary.items():
+				if isinstance(value, list):
+					l+=1
+					for element in value:
+						if not isinstance(element, dict):
+							return 0
+						if key=='subNodes' and 'type' in element and element['type']=='FunctionDefinition':
+							control_functions(element,var, scope, fun, tipo, line, element['name'], "function")
+							continue
+						if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
+							control_functions(element, var, scope, fun, tipo, line, element['name'], "modifier")
+							continue			
+
+						control_functions(element, var, scope, fun, tipo, line, functionC, tipoC)
+				elif isinstance(value, dict):
+					if key=="expression" and "type" in value and value["type"]=="FunctionCall" and ((scope=="l" and l>=line and tipo==tipoC and fun==functionC) or scope=="s"):
+						presence=0
+						variable_presence_arguments(value["arguments"], var)
+						if "name" in value["expression"] and value["expression"]["name"]=="require":
+							presence=0
+						if presence==1:
+							check=1
+							check_spec=1
+					l+=1
+					control_functions(value, var, scope, fun, tipo, line, functionC, tipoC)
+				else:
+					l+=1
+
+		def control_condition(cond):
+			global check
+			global presence
+			if not isinstance(cond, dict):
+				return 0
+			if "type" in cond and cond["type"]=="BinaryOperation" and cond["operator"]=="==":
+				presence=0
+				timestamp_presence(cond["left"])
+				timestamp_presence(cond["right"])
+				if presence==1:
+					check=1
+
+			for key, value in cond.items():
+				if isinstance(value, list):
+					for element in value:
+						if not isinstance(element, dict):
+							return 0
+						control_condition(element)
+				elif isinstance(value, dict):
+					control_condition(value)
 		
-		print("{:<40} {}".format("CHECK", "RESULTS"))
+		def var_dang_cond(cond,var):
+			global check
+			global presence
+			global check_spec
+			if not isinstance(cond, dict):
+				return 0
+			if "type" in cond and cond["type"]=="BinaryOperation" and cond["operator"]=="==":
+				presence=0
+				variable_presence(cond["left"],var)
+				variable_presence(cond["right"],var)
+				if presence==1:
+					check=1
+					check_spec=1
 
-		print()
+			for key, value in cond.items():
+				if isinstance(value, list):
+					for element in value:
+						if not isinstance(element, dict):
+							return 0
+						control_condition(element)
+				elif isinstance(value, dict):
+					control_condition(value)
+		
+		def check_condition_presence(dictionary, var, scope, fun, tipo, line, functionC=None, tipoC=None):
+			global l
+			if not isinstance(dictionary, dict):
+				return 0
+			for key, value in dictionary.items():
+				if isinstance(value, list):
+					l+=1
+					for element in value:
+						if not isinstance(element, dict):
+							return 0
+						#verifies that it is in the considered function
+						if key=='subNodes' and 'type' in element and element['type']=='FunctionDefinition':
+							check_condition_presence(element,var, scope, fun, tipo, line, element['name'], "function")
+							continue
+						if key=='subNodes' and 'type' in element and element['type']=='ModifierDefinition':
+							check_condition_presence(element, var, scope, fun, tipo, line, element['name'], "modifier")
+							continue	
 
-		print("-Timestamp used inside the cryptocurrency")
-		print("amount to be transferred-")
+						if key=='statements' and element['type']=='IfStatement' and ((scope=="l" and l>=line and tipo==tipoC and fun==functionC) or scope=="s"):
+							var_dang_cond(element["condition"], var)
+						#check require conditions
+						if key=='statements' and element['type']=='ExpressionStatement' and element['expression']['type']=='FunctionCall' and 'name' in element['expression']['expression'] and element['expression']['expression']['name']=='require' and ((scope=="l" and l>=line and tipo==tipoC and fun==functionC) or scope=="s"):
+							var_dang_cond(element['expression']['arguments'][0], var)
+						#check while conditions
+						if key=='statements' and element['type']=='WhileStatement' and ((scope=="l" and l>=line and tipo==tipoC and fun==functionC) or scope=="s"):
+							var_dang_cond(element["condition"], var)
+		
 
+						check_condition_presence(element, var, scope, fun, tipo, line, functionC, tipoC)
+				elif isinstance(value, dict):
+					l+=1
+					check_condition_presence(value, var, scope, fun, tipo, line, functionC, tipoC)
+				else:
+					l+=1
+
+
+		alert_td = ['s'] * len(timestamp_usage)
 		i=0
+		a_count=0
+		check_spec=0
 		for var in timestamp_usage:
+			check=0
 			if var[0]=="assignment":
-				if alert_money[i]=="a":
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "T"))
-				elif alert_money[i]=="s":
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "F"))
-				i+=1
+				l=0
+				check_spec=0
+				control_functions(contract_json,var[1],var[2],var[3],var[4],var[5])
+				if check_spec==1:
+					alert_string+="\n!!!ATTENTION!!! The variable "+read(var[1])+", defined using block timestamp, is used as a parameter in a function call. Check the function implementation"
+				l=0
+				check_spec=0
+				check_condition_presence(contract_json,var[1],var[2],var[3],var[4],var[5])
+				if check_spec==1:
+					alert_string+="\n!!!ATTENTION!!! The variable "+read(var[1])+", defined using block timestamp, is used in a condition, checking it to be equal to another value"
+				for vari in related_variables[a_count]:
+					l=0
+					check_spec=0
+					control_functions(contract_json,vari[0],vari[2],vari[3],vari[4],vari[1])
+					if check_spec==1:
+						alert_string+="\n!!!ATTENTION!!! The variable "+read(vari[0])+", defined directly or indirectly with "+read(var[1])+"(in turn defined using block timestamp), is used as a parameter in a function call. Check the function implementation"
+					l=0
+					check_spec=0
+					check_condition_presence(contract_json,vari[0],vari[2],vari[3],vari[4],vari[1])
+					if check_spec==1:
+						alert_string+="\n!!!ATTENTION!!! The variable "+read(vari[0])+", defined directly or indirectly with "+read(var[1])+"(in turn defined using block timestamp), is used in a condition, checking it to be equal to another value"
+				if check==1:
+					alert_td[i]='v'
+				a_count+=1
 			else:
-				print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "F"))
+				control_condition(var[4])
+				if check==1:
+					alert_string+="\n!!!ATTENTION!!! The #"+str(var[1])+" "+var[0]+" in the "+var[2]+" "+var[3]+" is checking the timestamp to be equal to some other values/variables"
+					alert_td[i]='v'
 
-		print("\nIf the condition is verified (T), remember to apply the 15-second rule to see if it is a dangerous case")
+			i+=1
+		#print(alert_td)
+
+		
+		print("{:<50} {}".format("CHECK", "RESULTS"))
+
 		print()
 
-		print("-Timestamp used inside a condition")
-		print(" regulating a dangerous body")
-		print(" (while, if, or require)-")
-
+		print("-Timestamp NOT used EXCLUSIVELY for majority")
+		print("or minority comparisons-")
 		i=0
 		for var in timestamp_usage:
 			if var[0]=="assignment":
-				if conditions_alert[i]=="a":
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "T"))
-				elif conditions_alert[i]=="s":
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "F"))
-				i+=1
-			elif var[0]=="if condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				verification_body(var[8],var[2])
-				if dangeorus==1:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "T"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "F"))
-			elif var[0]=="while condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				if dangeorus==1:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "T"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "F"))
-			elif var[0]=="require condition":
-				dangeorus=0
-				verification_body_require(contract_json,var[2],var[4])
-				if dangeorus==1:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "T"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "F"))
+				if alert_td[i]=="v":
+					print("{:<53} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[4]) + " " + str(var[3]) + ")", "T"))
+				elif alert_td[i]=="s":
+					print("{:<53} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[4]) + " " + str(var[3]) + ")", "F"))
+			else:
+				if alert_td[i]=="v":
+					print("{:<53} {}".format("(" + var[0] + "," + str(var[1]) + "," + var[3] + " " + str(var[2]) + ")", "T"))
+				elif alert_td[i]=="s":
+					print("{:<53} {}".format("(" + var[0] + "," + str(var[1]) + "," + var[3] + " " + str(var[2]) + ")", "F"))
+			i+=1
 
+		
+		print("\n--------------------------------------------------\n")
+		print("                    DETAILED OUTPUT\n")
+		print(alert_string)
 
 		print("\n--------------------------------------------------\n")
 		print("                    FINAL RESULTS\n")
 		i=0
 		for var in timestamp_usage:
 			if var[0]=="assignment":
-				if alert_money[i]=="s" and conditions_alert[i]=="s":
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "False Positive"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[2]) + ")", "True Positive"))
-				i+=1	
-			elif var[0]=="if condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				verification_body(var[8],var[2])
-				if dangeorus==0:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "False Positive"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "True Positive"))
-			elif var[0]=="while condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				if dangeorus==0:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "False Positive"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "True Positive"))
-			elif var[0]=="require condition":
-				dangeorus=0
-				verification_body_require(contract_json,var[2],var[4])
-				if dangeorus==0:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "False Positive"))
-				else:
-					print("{:<43} {}".format("(" + var[0] + "," + str(var[1]) + "," + str(var[2]) + ")", "True Positive"))
-		print("\n--------------------------------------------------\n")
-		print("                    DETAILED OUTPUT\n")
-
-		i=0
-		for var in timestamp_usage:
-			if var[0]=="assignment":
-				if alert_money[i]=="s" and conditions_alert[i]=="s":
-					print("!!!ATTENTION!!!! The timestamp used to define \"" + read(var[1]) + "\" variable in \"" + str(var[2]) + "\" function could be a FALSE POSITIVE because it is not used, even indirectly, either to indicate the amount of cryptocurrency to be transferred or in a condition regulating a dangerous body.")
-				i+=1	
-			elif var[0]=="if condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				verification_body(var[8],var[2])
-				if dangeorus==0:
-					print("!!!ATTENTION!!!! The timestamp used in \"" + var[0] + "\" in \"" + str(var[2]) + "\" function (n"+ str(var[1]) +" occurrence) could be a FALSE POSITIVE because it is not a condition regulating a dangerous body.")
-			elif var[0]=="while condition":
-				dangeorus=0
-				verification_body(var[7],var[2])
-				if dangeorus==0:
-					print("!!!ATTENTION!!!! The timestamp used in \"" + var[0] + "\" in \"" + str(var[2]) + "\" function (n"+ str(var[1]) +" occurrence) could be a FALSE POSITIVE because it is not a condition regulating a dangerous body.")
-			elif var[0]=="require condition":
-				dangeorus=0
-				verification_body_require(contract_json,var[2],var[4])
-				if dangeorus==0:
-					print("!!!ATTENTION!!!! The timestamp used in \"" + var[0] + "\" in \"" + str(var[2]) + "\" function (n"+ str(var[1]) +" occurrence) could be a FALSE POSITIVE because it is not a condition regulating a dangerous body.")
+				if alert_td[i]=="v":
+					print("{:<53} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[4]) + " " + str(var[3]) + ")", "True Positive"))
+				elif alert_td[i]=="s":
+					print("{:<53} {}".format("(" + var[0] + "," + read(var[1]) + "," + str(var[4]) + " " + str(var[3]) + ")", "False Positive"))
+			else:
+				if alert_td[i]=="v":
+					print("{:<53} {}".format("(" + var[0] + "," + str(var[1]) + "," + var[3] + " " + str(var[2]) + ")", "True Positive"))
+				elif alert_td[i]=="s":
+					print("{:<53} {}".format("(" + var[0] + "," + str(var[1]) + "," + var[3] + " " + str(var[2]) + ")", "False Positive"))
+			i+=1
 
 
 if vulnerabilities_selection[2]==1:
@@ -1171,6 +1035,9 @@ if vulnerabilities_selection[2]==1:
 
 	#array to store information about functions possibly vulnerable to Reentrancy
 	risky_calls=[]
+	
+	#list of membername functions which may look external but are not
+	exception=["pop","push","add","sub","mul","div","mod","send","value"]
 
 	l=0
 	cont=0
@@ -1191,16 +1058,41 @@ if vulnerabilities_selection[2]==1:
 						visibility=element['visibility']
 						modifiers=element['modifiers']
 						cont=0
+					if 'type' in element and element['type']=="NameValueExpression" and 'memberName' in element['expression'] and element['expression']['memberName']=='call':
+						#print("trovato 1")
+						cont+=1
+						risky_calls.append((function_name,visibility,modifiers,element,element['expression']['expression'],l,cont))
+					if 'type' in element and element['type']=="FunctionCall" and element['expression']['type']=='MemberAccess' and element['expression']['expression']['type']=='MemberAccess' and element['expression']['memberName']=='value' and element['expression']['expression']['memberName']=='call':
+						#print("trovato 2")
+						cont+=1
+						risky_calls.append((function_name,visibility,modifiers,element,element['expression']['expression']['expression'],l,cont))
+					if 'type' in element and element['type']=="FunctionCall" and element['expression']['type']=='MemberAccess' and element['expression']['memberName'] not in exception:
+						if element['expression']['memberName']!="transfer" or len(element["arguments"])!=1:
+							if element['expression']['expression']['type']!="Identifier" or element['expression']['expression']['name']!="abi":
+								#print(element['expression']['memberName'])
+								#print("trovato 3")
+								cont+=1
+								risky_calls.append((function_name,visibility,modifiers,element,element['expression']['expression'],l,cont))
+							
 										
 					search_functions(element, function_name, visibility, modifiers)
 			elif isinstance(value, dict):
 				l+=1
 				if 'type' in value and value['type']=="NameValueExpression" and 'memberName' in value['expression'] and value['expression']['memberName']=='call':
+					#print("trovato 4")
 					cont+=1
 					risky_calls.append((function_name,visibility,modifiers,value,value['expression']['expression'],l,cont))
 				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['expression']['type']=='MemberAccess' and value['expression']['memberName']=='value' and value['expression']['expression']['memberName']=='call':
+					#print("trovato 5")
 					cont+=1
 					risky_calls.append((function_name,visibility,modifiers,value,value['expression']['expression']['expression'],l,cont))
+				if 'type' in value and value['type']=="FunctionCall" and value['expression']['type']=='MemberAccess' and value['expression']['memberName'] not in exception:
+					if value['expression']['memberName']!="transfer" or len(value["arguments"])!=1:
+						if value['expression']['expression']['type']!="Identifier" or value['expression']['expression']['name']!="abi":
+							#print(value['expression']['memberName'])
+							#print("trovato 6")
+							cont+=1
+							risky_calls.append((function_name,visibility,modifiers,value,value['expression']['expression'],l,cont))
 				search_functions(value, function_name, visibility, modifiers)
 			else:
 				l+=1
@@ -1214,22 +1106,19 @@ if vulnerabilities_selection[2]==1:
 		print("No functions in code were found that might appear vulnerable to Reentrancy\n")
 	else:
 
-
 		#User's choice of which functions to go to check for Reentrancy risk
 		def tuple_selection(array):
 			tuple_to_keep=[]
 			lista=[]
-			for i,tupla in enumerate(array):
-				if i==0:
-					lista.append(tupla[0])
-				elif tupla[0]!=array[i-1][0]:
-					lista.append(tupla[0])
+			for tupla in array:
+				lista.append(tupla[0])
+			lista=list(set(lista))
 			if alert_selection:
 				choice=alert_selection
 			else:
 				for i,func in enumerate(lista):
-					print(str(i+1) +". " + func)
-				choice=input("Insert the number of the functions that need to be verified (separated by comma) - put n for none / put a for all:")
+					print(str(i+1) +". " + str(func))
+				choice=input("\nInsert the number of the functions that need to be verified (separated by comma) - put n for none / put a for all:")
 			if choice == "a" or choice == "n" or all(number.strip().isdigit() for number in choice.split(',')):
 				if choice=="n":
 					return tuple_to_keep
@@ -1264,7 +1153,7 @@ if vulnerabilities_selection[2]==1:
 		i=0
 		for variable in risky_calls:
 			if variable[1]=="private" or variable[1]=="internal":
-				print("{:<43} {}".format(str(variable[0]) + " #" + str(variable[6]) , "F"))
+				print("{:<43} {}".format(str(variable[0]) + " #" + str(variable[6]), "F"))
 				results[i]='f'
 				alert_string+="\n!!!ATTENTION!!!! The \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because of the visibility"
 			else:
@@ -1342,9 +1231,9 @@ if vulnerabilities_selection[2]==1:
 						found_require=1
 					search_require(value, ident,function)
 
-		print("\n-Externall Call not subject to conditions")
+		print("\n-Externall function call not subject to conditions")
 		print(" (if or require)-")
-		alert_string+="\n\nCHECK REFERENCE:-Externall Call not subject to conditions (if or require)-"
+		alert_string+="\n\nCHECK REFERENCE:-Externall function call not subject to conditions (if or require)-"
 		i=0
 		for variable in risky_calls:
 			search_conditions(contract_json,variable[3],variable[0])
@@ -1352,7 +1241,7 @@ if vulnerabilities_selection[2]==1:
 			if check==1:
 				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "F"))
 				results[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The #" + str(variable[6]) + " external call in \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because the call is subject to some conditions (if or require)"
+				alert_string+="\n!!!ATTENTION!!!! The #" + str(variable[6]) + " external call in \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because the call is subject to some conditions (if or require). Check their restrictions"
 			else:
 				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "T"))
 			i+=1
@@ -1381,7 +1270,7 @@ if vulnerabilities_selection[2]==1:
 							else:
 								continue
 						if key=="statements":
-							if "type" in element and element["type"]=="VariableDeclarationStatement" and "name" in element["variables"][0] and variable_name['type']=="Identifier" and element["variables"][0]["name"]==variable_name['name']:
+							if "type" in element and element["type"]=="VariableDeclarationStatement" and variable_name['type']=="Identifier" and "name" in element["variables"][0] and element["variables"][0]["name"]==variable_name['name']:
 									definition=element["initialValue"]
 						search_definition(element, variable_name, function, ident)
 					
@@ -1392,18 +1281,47 @@ if vulnerabilities_selection[2]==1:
 						final_definition=definition
 					search_definition(value, variable_name, function, ident)
 
+		def extract_parameters(dictionary,function):
+			if not isinstance(dictionary, dict):
+				return 0
+			global parameters
+			for key, value in dictionary.items():
+				if isinstance(value, list):
+					for element in value:
+						if not isinstance(element, dict):
+							continue
+						if key=='subNodes':
+							if 'type' in element and element['type']=='FunctionDefinition' and element['name']==function:
+								for par in element["parameters"]:
+									parameters.append(par["identifier"])
+								extract_parameters(element, function)
+								continue
+							else:
+								continue
+						extract_parameters(element, function)
+					
+				elif isinstance(value, dict):
+					extract_parameters(value, function)
 
-		print("\n-Call Adr. NOT HardCoded-")
-		alert_string+="\n\nCHECK REFERENCE:-Call Adr. NOT HardCoded-"
+
+		print("\n-External call Adr. controllable by user-")
+		alert_string+="\n\nCHECK REFERENCE:-External call Adr. controllable by user-"
 		i=0
+		msg_sender={'type': 'MemberAccess', 'expression': {'type': 'Identifier', 'name': 'msg'}, 'memberName': 'sender'}
+		parameters=[]
 		for funz in risky_calls:
 			definition=""
 			final_definition=""
+			parameters.clear()
 			search_definition(contract_json, funz[4], funz[0], funz[3])
-			if final_definition!="":
+			extract_parameters(contract_json,funz[0])
+			#print(funz[4])
+			#print(final_definition)
+			#print(parameters)
+			if final_definition!=msg_sender and final_definition not in parameters and ((funz[4]["type"]=="Identifier" and funz[4] not in parameters) or (funz[4]["type"]=="FunctionCall" and funz[4]["arguments"][0] not in parameters)):
 				print("{:<43} {}".format(str(funz[0])+ " #" + str(funz[6]), "F"))
 				results[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The #" + str(funz[6]) + " external call in \"" + str(funz[0]) + "\" function could be a FALSE POSITIVE because the call is made on an hard-coded address"
+				alert_string+="\n!!!ATTENTION!!!! The #" + str(funz[6]) + " external call in \"" + str(funz[0]) + "\" function could be a FALSE POSITIVE because the call is made on an address not controllable by user (not equal to msg.sender and not passed as a parameter)"
 			else:
 				print("{:<43} {}".format(str(funz[0])+ " #" + str(funz[6]), "T"))
 			i+=1
@@ -1462,8 +1380,8 @@ if vulnerabilities_selection[2]==1:
 
 		extract_variables(contract_json)
 
-		print("\n-State Variable changed after call-")
-		alert_string+="\n\nCHECK REFERENCE:-State Variable changed after call-"
+		print("\n-State Variable changed after external call-")
+		alert_string+="\n\nCHECK REFERENCE:-State Variable changed after external call-"
 		i=0
 		for variable in risky_calls:
 			l=0
@@ -1477,41 +1395,42 @@ if vulnerabilities_selection[2]==1:
 				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "T"))
 			i+=1
 
-		#function to check whether the amount to be transferred includes msg.value (function not actually used)
-		presence=0
+		#function to check whether the amount to be transferred includes msg.value
 		msg_value={'type': 'MemberAccess', 'expression': {'type': 'Identifier', 'name': 'msg'}, 'memberName': 'value'}
-		def presenza_msg_value(dictionary):
-			global presence
-			if dictionary==msg_value:
-				presence=1
-			if not isinstance(dictionary, dict):
+		def verify_amount(list_arg):
+			global check
+			if not isinstance(list_arg, list):
 				return 0
-			for key, value in dictionary.items():
-				if isinstance(value, list):
-					for element in value:
-						if not isinstance(element, dict):
-							return 0
-						presenza_msg_value(element)
-				elif isinstance(value, dict):
-					if (key=="left" or key=="right") and value==msg_value:
-						presence=1
-					presenza_msg_value(value)
+			for arg in list_arg:
+				if arg==msg_value:
+					check=1
+				elif 'type' in arg and arg['type']=="BinaryOperation":
+					if (arg['operator']=="*" and (arg['left']==msg_value or arg['right']==msg_value)) or (arg['operator']=="/" and arg['left']==msg_value):
+						check=1
 
-		print("\n-Amount NOT defined as msg.value-")
-		alert_string+="\n\nCHECK REFERENCE:-Amount NOT defined as msg.value-"
-		i=0
+		print("\n-Amount NOT directly proportional to msg.value-")
+		alert_string+="\n\nCHECK REFERENCE:-Amount NOT directly proportional to msg.value-"
+		i=0	
 		for variable in risky_calls:
-			if 'arguments' in variable[3]['arguments'] and variable[3]['arguments']['arguments'][0]==msg_value:
+			check=0
+			
+			if 'arguments' in variable[3]['arguments']:
+				#print(variable[3]['arguments']['arguments'])
+				verify_amount(variable[3]['arguments']['arguments'])
+			else:
+				#print(variable[3]['arguments'])
+				verify_amount(variable[3]['arguments'])
+			if check==1:
 				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "F"))
 				results[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The #" + str(variable[6]) + " external call in \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because the amount is defined as msg.value"
-			elif 'arguments' not in variable[3]['arguments'] and variable[3]['arguments'][0]==msg_value:
-				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "F"))
-				results[i]='f'
-				alert_string+="\n!!!ATTENTION!!!! The #" + str(variable[6]) + " external call in \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because the amount is defined as msg.value"
+				alert_string+="\n!!!ATTENTION!!!! The #" + str(variable[6]) + " external call in \"" + str(variable[0]) + "\" function could be a FALSE POSITIVE because an argument (supposed to be amount to transfer) is directly proportional to msg.value. Check if actually the argument identified is actually the amount to transfer"
 			else:
 				print("{:<43} {}".format(str(variable[0])+ " #" + str(variable[6]), "T"))
 			i+=1
+
+		print("\n--------------------------------------------------\n")
+		print("               DETAILED OUTPUT\n")
+		print(alert_string)
 
 		print("\n--------------------------------------------------\n")
 		print("                FINAL RESULTS\n")
@@ -1534,6 +1453,4 @@ if vulnerabilities_selection[2]==1:
 			elif tot==0:
 				print("{:<35} {}".format(str(funz), "False Positive"))
 			i+=1
-		print("\n--------------------------------------------------\n")
-		print("               DETAILED OUTPUT\n")
-		print(alert_string)
+		
