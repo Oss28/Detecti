@@ -3,7 +3,7 @@ import os
 import subprocess
 
 # Directory containing the .sol files
-directory = './SCs_test/UEC/'
+directory = './SCs_test/URV/'
 
 # Path to the Python program to run on each .sol file
 program_path = 'Detecti.py'
