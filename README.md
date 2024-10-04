@@ -27,7 +27,7 @@ pip install matplotlib
 ## Tests
 `Dataset` folder contains our dataset, a collection of Solidity smart contracts, currently deployed on the Ethereum blockchain, serving as test cases to assess the tool's performance. Each vulnerability category includes 32 smart contracts, located within their respective subfolders: `Ree` for Reentrancy, `TD` for Timestamp Dependence, and `URV` for Unchecked Return Value.
 
-To easily and quickly reproduce the tests on all 96 smart contracts, we provide the `script.py` file. This script takes advantage of several options available in Detecti's command-line interface to allow for automation. 
+To easily and quickly reproduce the tests on all 96 smart contracts, we provide the `script.py` file. This script takes advantage of several options available in Detecti's command-line interface to allow for analysis automation. 
 
 Here are the available options:
 - `-s` This option allows users to select the types of vulnerabilities to be analyzed within the smart contract. Users can specify one or more comma-separated values to select multiple vulnerabilities at once. (1 for URV, 2 for TD, and 3 for REE)
